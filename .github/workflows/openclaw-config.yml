@@ -1,0 +1,41 @@
+name: Update OpenClaw Config
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'openclaw-config/**'
+      - '.github/workflows/openclaw-config.yml'
+  workflow_dispatch:
+
+jobs:
+  update-config:
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Push Config and Restart
+        run: |
+          az vm run-command invoke \
+            --resource-group rg-openclaw \
+            --name vm-openclaw \
+            --command-id RunShellScript \
+            --scripts "
+              az login --identity --allow-no-subscriptions
+              FOUNDRY_API_KEY=\$(az keyvault secret show --vault-name kv-oc-eus2 --name foundry-api-key --query value -o tsv)
+              TELEGRAM_BOT_TOKEN=\$(az keyvault secret show --vault-name kv-oc-eus2 --name telegram-bot-token --query value -o tsv)
+              FOUNDRY_ENDPOINT=\"https://oc-foundry-eus2.openai.azure.com/openai/v1\"
+              sudo -u openclaw openclaw gateway restart
+              sudo -u openclaw openclaw status
+            "

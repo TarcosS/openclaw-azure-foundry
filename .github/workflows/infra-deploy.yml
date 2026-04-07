@@ -1,0 +1,87 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infrastructure/**'
+      - 'openclaw-config/**'
+      - '.github/workflows/infra-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  what-if:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: What-If
+        run: |
+          az deployment sub what-if \
+            --location eastus2 \
+            --template-file infrastructure/main.bicep \
+            --parameters infrastructure/parameters/prod.bicepparam \
+            --parameters sshPublicKey="${{ secrets.SSH_PUBLIC_KEY }}" \
+            --parameters telegramBotToken="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+
+  deploy:
+    needs: what-if
+    runs-on: ubuntu-latest
+    environment: prod
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy
+        run: |
+          az deployment sub create \
+            --location eastus2 \
+            --template-file infrastructure/main.bicep \
+            --parameters infrastructure/parameters/prod.bicepparam \
+            --parameters sshPublicKey="${{ secrets.SSH_PUBLIC_KEY }}" \
+            --parameters telegramBotToken="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify OpenClaw Status
+        run: |
+          # Wait for cloud-init to complete (can take 5-10 min)
+          sleep 300
+          az vm run-command invoke \
+            --resource-group rg-openclaw \
+            --name vm-openclaw \
+            --command-id RunShellScript \
+            --scripts "cloud-init status --wait && systemctl status openclaw && sudo -u openclaw openclaw status"

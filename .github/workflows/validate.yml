@@ -1,0 +1,38 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Lint Bicep
+        run: az bicep build --file infrastructure/main.bicep
+
+      - name: Validate Deployment
+        run: |
+          az deployment sub validate \
+            --location eastus2 \
+            --template-file infrastructure/main.bicep \
+            --parameters infrastructure/parameters/dev.bicepparam \
+            --parameters sshPublicKey="${{ secrets.SSH_PUBLIC_KEY }}" \
+            --parameters telegramBotToken="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+
+      - name: Shellcheck
+        run: |
+          sudo apt-get install -y shellcheck
+          shellcheck scripts/*.sh
