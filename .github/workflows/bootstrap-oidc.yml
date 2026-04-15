@@ -40,6 +40,44 @@ jobs:
       id-token: write
 
     steps:
+      - name: Validate Input Override Credentials JSON
+        if: ${{ inputs.azure_bootstrap_credentials != '' }}
+        shell: bash
+        env:
+          AZURE_CREDS_JSON: ${{ inputs.azure_bootstrap_credentials }}
+        run: |
+          set -euo pipefail
+          echo '::add-mask::${{ inputs.azure_bootstrap_credentials }}'
+          echo "$AZURE_CREDS_JSON" | jq -e . >/dev/null
+          for key in clientId clientSecret subscriptionId tenantId; do
+            value=$(echo "$AZURE_CREDS_JSON" | jq -r --arg k "$key" '.[$k] // empty')
+            if [ -z "$value" ]; then
+              echo "ERROR: azure_bootstrap_credentials is missing required field: $key" >&2
+              exit 1
+            fi
+          done
+
+      - name: Validate Repository Bootstrap Credentials JSON
+        if: ${{ inputs.azure_bootstrap_credentials == '' }}
+        shell: bash
+        env:
+          AZURE_CREDS_JSON: ${{ secrets.AZURE_BOOTSTRAP_CREDENTIALS }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AZURE_CREDS_JSON" ]; then
+            echo "ERROR: Secret AZURE_BOOTSTRAP_CREDENTIALS is empty or not set." >&2
+            exit 1
+          fi
+          echo '::add-mask::${{ secrets.AZURE_BOOTSTRAP_CREDENTIALS }}'
+          echo "$AZURE_CREDS_JSON" | jq -e . >/dev/null
+          for key in clientId clientSecret subscriptionId tenantId; do
+            value=$(echo "$AZURE_CREDS_JSON" | jq -r --arg k "$key" '.[$k] // empty')
+            if [ -z "$value" ]; then
+              echo "ERROR: Secret AZURE_BOOTSTRAP_CREDENTIALS is missing required field: $key" >&2
+              exit 1
+            fi
+          done
+
       - name: Azure Login (Input Override Credentials)
         if: ${{ inputs.azure_bootstrap_credentials != '' }}
         uses: azure/login@v2
