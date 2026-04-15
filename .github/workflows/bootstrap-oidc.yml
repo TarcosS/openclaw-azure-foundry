@@ -1,0 +1,254 @@
+name: Bootstrap OIDC and Repo Settings
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "App Registration display name"
+        required: true
+        default: "openclaw-github-actions"
+      azure_bootstrap_credentials:
+        description: "Optional bootstrap credentials JSON override (uses repo secret when empty)"
+        required: false
+      target_tenant_id:
+        description: "Optional tenant ID to enforce before setup"
+        required: false
+      target_subscription_id:
+        description: "Optional subscription ID to enforce before setup"
+        required: false
+      generate_ssh_key:
+        description: "Generate an SSH keypair when ssh_public_key is not provided"
+        required: false
+        default: "true"
+      ssh_public_key:
+        description: "Optional SSH public key content for VM access"
+        required: false
+      ssh_private_key_secret_name:
+        description: "Repo secret name for generated private key"
+        required: false
+        default: "OPENCLAW_SSH_PRIVATE_KEY"
+      telegram_bot_token:
+        description: "Telegram bot token from BotFather"
+        required: true
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+      id-token: write
+
+    steps:
+      - name: Azure Login (Input Override Credentials)
+        if: ${{ inputs.azure_bootstrap_credentials != '' }}
+        uses: azure/login@v2
+        with:
+          creds: ${{ inputs.azure_bootstrap_credentials }}
+
+      - name: Azure Login (Repository Bootstrap Credentials)
+        if: ${{ inputs.azure_bootstrap_credentials == '' }}
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_BOOTSTRAP_CREDENTIALS }}
+
+      - name: Validate Azure Context
+        id: context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          targetTenantId='${{ inputs.target_tenant_id }}'
+          targetSubscriptionId='${{ inputs.target_subscription_id }}'
+
+          currentTenantId=$(az account show --query tenantId -o tsv)
+          currentSubscriptionId=$(az account show --query id -o tsv)
+
+          if [ -n "$targetTenantId" ] && [ "$currentTenantId" != "$targetTenantId" ]; then
+            echo "ERROR: Active tenant ($currentTenantId) does not match target tenant ($targetTenantId)." >&2
+            echo "Use bootstrap credentials scoped to the intended tenant and re-run." >&2
+            exit 1
+          fi
+
+          if [ -n "$targetSubscriptionId" ] && [ "$currentSubscriptionId" != "$targetSubscriptionId" ]; then
+            az account set --subscription "$targetSubscriptionId"
+            currentSubscriptionId=$(az account show --query id -o tsv)
+            if [ "$currentSubscriptionId" != "$targetSubscriptionId" ]; then
+              echo "ERROR: Active subscription ($currentSubscriptionId) does not match target subscription ($targetSubscriptionId)." >&2
+              exit 1
+            fi
+          fi
+
+          echo "tenant_id=$currentTenantId" >> "$GITHUB_OUTPUT"
+          echo "subscription_id=$currentSubscriptionId" >> "$GITHUB_OUTPUT"
+
+      - name: Mask Sensitive Inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n '${{ inputs.azure_bootstrap_credentials }}' ]; then
+            echo '::add-mask::${{ inputs.azure_bootstrap_credentials }}'
+          fi
+          if [ -n '${{ inputs.telegram_bot_token }}' ]; then
+            echo '::add-mask::${{ inputs.telegram_bot_token }}'
+          fi
+          if [ -n '${{ inputs.ssh_public_key }}' ]; then
+            echo '::add-mask::${{ inputs.ssh_public_key }}'
+          fi
+
+      - name: Resolve SSH Key Material
+        id: ssh
+        shell: bash
+        env:
+          SSH_PUBLIC_KEY_INPUT: ${{ inputs.ssh_public_key }}
+          GENERATE_SSH_KEY: ${{ inputs.generate_ssh_key }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$SSH_PUBLIC_KEY_INPUT" ]; then
+            echo "source=provided" >> "$GITHUB_OUTPUT"
+            {
+              echo "public_key<<EOF"
+              printf '%s\n' "$SSH_PUBLIC_KEY_INPUT"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$GENERATE_SSH_KEY" != "true" ]; then
+            echo "ERROR: ssh_public_key is empty and generate_ssh_key is false." >&2
+            exit 1
+          fi
+
+          keyPath="$RUNNER_TEMP/openclaw_gh"
+          ssh-keygen -t ed25519 -N "" -C "openclaw-github-actions" -f "$keyPath" >/dev/null
+
+          publicKey=$(cat "$keyPath.pub")
+          privateKey=$(cat "$keyPath")
+
+          echo "::add-mask::$privateKey"
+
+          echo "source=generated" >> "$GITHUB_OUTPUT"
+          {
+            echo "public_key<<EOF"
+            printf '%s\n' "$publicKey"
+            echo "EOF"
+            echo "private_key<<EOF"
+            printf '%s\n' "$privateKey"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create App Registration, SPN, and Federated Credentials
+        id: oidc
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_NAME='${{ inputs.app_name }}'
+          REPO='${{ github.repository }}'
+
+          appId=$(az ad app create --display-name "$APP_NAME" --query appId -o tsv)
+          az ad sp create --id "$appId" -o none
+          spObjectId=$(az ad sp show --id "$appId" --query id -o tsv)
+
+          az ad app federated-credential create --id "$appId" --parameters "{
+            \"name\": \"github-main\",
+            \"issuer\": \"https://token.actions.githubusercontent.com\",
+            \"subject\": \"repo:${REPO}:ref:refs/heads/main\",
+            \"audiences\": [\"api://AzureADTokenExchange\"]
+          }" -o none
+
+          az ad app federated-credential create --id "$appId" --parameters "{
+            \"name\": \"github-pr\",
+            \"issuer\": \"https://token.actions.githubusercontent.com\",
+            \"subject\": \"repo:${REPO}:pull_request\",
+            \"audiences\": [\"api://AzureADTokenExchange\"]
+          }" -o none
+
+          az ad app federated-credential create --id "$appId" --parameters "{
+            \"name\": \"github-dispatch\",
+            \"issuer\": \"https://token.actions.githubusercontent.com\",
+            \"subject\": \"repo:${REPO}:ref:refs/heads/main\",
+            \"audiences\": [\"api://AzureADTokenExchange\"]
+          }" -o none
+
+          az role assignment create \
+            --assignee-object-id "$spObjectId" \
+            --assignee-principal-type ServicePrincipal \
+            --role "Contributor" \
+            --scope "/subscriptions/${{ steps.context.outputs.subscription_id }}" \
+            -o none
+
+          az role assignment create \
+            --assignee-object-id "$spObjectId" \
+            --assignee-principal-type ServicePrincipal \
+            --role "User Access Administrator" \
+            --scope "/subscriptions/${{ steps.context.outputs.subscription_id }}" \
+            -o none
+
+          echo "app_id=$appId" >> "$GITHUB_OUTPUT"
+
+      - name: Set GitHub Repo Variables and Secrets
+        id: repo_settings
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SSH_PUBLIC_KEY: ${{ steps.ssh.outputs.public_key }}
+          SSH_PRIVATE_KEY: ${{ steps.ssh.outputs.private_key }}
+          SSH_SOURCE: ${{ steps.ssh.outputs.source }}
+          SSH_PRIVATE_KEY_SECRET_NAME: ${{ inputs.ssh_private_key_secret_name }}
+        run: |
+          set -euo pipefail
+
+          gh variable set AZURE_CLIENT_ID --body "${{ steps.oidc.outputs.app_id }}"
+          gh variable set AZURE_TENANT_ID --body "${{ steps.context.outputs.tenant_id }}"
+          gh variable set AZURE_SUBSCRIPTION_ID --body "${{ steps.context.outputs.subscription_id }}"
+
+          if [ -z "$SSH_PUBLIC_KEY" ]; then
+            echo "ERROR: SSH public key could not be resolved." >&2
+            exit 1
+          fi
+
+          gh secret set SSH_PUBLIC_KEY --body "$SSH_PUBLIC_KEY"
+
+          if [ "$SSH_SOURCE" = "generated" ]; then
+            if [ -z "$SSH_PRIVATE_KEY" ]; then
+              echo "ERROR: Generated SSH private key is empty." >&2
+              exit 1
+            fi
+            gh secret set "$SSH_PRIVATE_KEY_SECRET_NAME" --body "$SSH_PRIVATE_KEY"
+          fi
+
+          gh secret set TELEGRAM_BOT_TOKEN --body '${{ inputs.telegram_bot_token }}'
+
+          echo "ssh_source=$SSH_SOURCE" >> "$GITHUB_OUTPUT"
+          if [ "$SSH_SOURCE" = "generated" ]; then
+            echo "ssh_private_key_secret_name=$SSH_PRIVATE_KEY_SECRET_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summary
+        shell: bash
+        run: |
+          cat <<EOT >> "$GITHUB_STEP_SUMMARY"
+          ## OIDC Bootstrap Complete
+
+          Created and configured:
+
+          - App Registration: `${{ steps.oidc.outputs.app_id }}`
+          - Tenant: `${{ steps.context.outputs.tenant_id }}`
+          - Subscription: `${{ steps.context.outputs.subscription_id }}`
+          - Federated credentials: main, pull_request, workflow_dispatch on main
+          - Role assignments: Contributor + User Access Administrator
+          - Repo variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+          - Repo secrets: SSH_PUBLIC_KEY, TELEGRAM_BOT_TOKEN
+
+          SSH key handling:
+
+          - Source: `${{ steps.repo_settings.outputs.ssh_source }}`
+          - Generated private key secret: `${{ steps.repo_settings.outputs.ssh_private_key_secret_name }}`
+
+          Next recommended step:
+
+          1. Create/verify the `prod` GitHub environment with required reviewers.
+          2. Run `Deploy Infrastructure` workflow.
+          EOT

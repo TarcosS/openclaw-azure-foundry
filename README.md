@@ -188,6 +188,8 @@ Use the sequence in [docs/SETUP.md](docs/SETUP.md) to:
 
 OIDC removes the need for stored service-principal secrets.
 
+For a click-by-click automation path (including optional SSH key generation in workflow), use [docs/BOOTSTRAP-CHECKLIST.md](docs/BOOTSTRAP-CHECKLIST.md).
+
 Important:
 
 1. Ensure federated credentials include the branch/event patterns you actually use.

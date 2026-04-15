@@ -8,6 +8,40 @@ This guide walks you through everything needed to deploy `openclaw-azure-foundry
 
 GitHub Actions authenticates to Azure using OpenID Connect (OIDC) — no stored service principal secrets required.
 
+### Optional: One-Click Bootstrap via GitHub Actions
+
+If you prefer automation, run the workflow [bootstrap-oidc.yml](../.github/workflows/bootstrap-oidc.yml) with `workflow_dispatch`.
+
+Quick run order and input values are documented in [BOOTSTRAP-CHECKLIST.md](./BOOTSTRAP-CHECKLIST.md).
+
+It will:
+
+1. Create the App Registration and service principal
+2. Create federated credentials for GitHub usage
+3. Assign required subscription roles
+4. Populate repo variables (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`)
+5. Populate repo secrets (`SSH_PUBLIC_KEY`, `TELEGRAM_BOT_TOKEN`)
+6. Optionally generate an SSH keypair and store private key in a repo secret
+
+Prerequisite for this bootstrap workflow:
+
+1. Add repository secret `AZURE_BOOTSTRAP_CREDENTIALS` (same shape as `AZURE_CREDENTIALS`) for an identity with rights to create app registrations and role assignments
+2. Optionally override at runtime using `azure_bootstrap_credentials` input (for temporary/testing credentials)
+
+SSH key automation options:
+
+1. Fully automatic: set `generate_ssh_key=true` and leave `ssh_public_key` empty.
+2. Manual key: set `ssh_public_key` and optionally set `generate_ssh_key=false`.
+3. If generated, private key is saved in repo secret `OPENCLAW_SSH_PRIVATE_KEY` (or your custom `ssh_private_key_secret_name`).
+4. Recommended access model: use Azure AD SSH as primary access path; generated key-based access is a fallback/recovery option.
+
+Security note:
+
+1. Prefer repository secret `AZURE_BOOTSTRAP_CREDENTIALS` over runtime input for production use.
+2. Treat `ssh_public_key` and `telegram_bot_token` workflow inputs as sensitive values and only run this workflow in trusted repositories.
+
+If you do not want bootstrap credentials in GitHub, use the manual CLI method below instead.
+
 ### Create an App Registration
 
 ```bash
