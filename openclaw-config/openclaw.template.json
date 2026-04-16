@@ -5,7 +5,7 @@
       "azure-openai-responses": {
         "baseUrl": "https://FOUNDRY_ACCOUNT_NAME.services.ai.azure.com/openai",
         "apiKey": "FOUNDRY_API_KEY",
-        "api": "openai-responses",
+        "api": "azure-openai-responses",
         "authHeader": false,
         "headers": {
           "api-key": "FOUNDRY_API_KEY"
