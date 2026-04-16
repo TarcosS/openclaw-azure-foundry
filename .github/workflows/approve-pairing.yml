@@ -1,0 +1,53 @@
+name: Approve Telegram Pairing
+
+on:
+  workflow_dispatch:
+    inputs:
+      pairing_code:
+        description: "Pairing code from Telegram (e.g. X3TXFYDZ)"
+        required: true
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve VM from Deployment
+        id: resolve
+        run: |
+          set -euo pipefail
+          RG=$(az deployment sub list --query "[?properties.provisioningState=='Succeeded' && properties.outputs.resourceGroupName.value!=null] | [0].properties.outputs.resourceGroupName.value" -o tsv)
+          VM=$(az deployment sub list --query "[?properties.provisioningState=='Succeeded' && properties.outputs.vmName.value!=null] | [0].properties.outputs.vmName.value" -o tsv)
+          if [ -z "$RG" ] || [ -z "$VM" ]; then
+            echo "ERROR: Failed to resolve RG/VM from latest successful deployment outputs" >&2
+            exit 1
+          fi
+          echo "rg=$RG" >> "$GITHUB_OUTPUT"
+          echo "vm=$VM" >> "$GITHUB_OUTPUT"
+          echo "Resolved: RG=$RG VM=$VM"
+
+      - name: Approve Pairing
+        run: |
+          set -euo pipefail
+          CODE='${{ inputs.pairing_code }}'
+          echo "Approving pairing code: $CODE"
+          RESULT=$(az vm run-command invoke \
+            --resource-group "${{ steps.resolve.outputs.rg }}" \
+            --name "${{ steps.resolve.outputs.vm }}" \
+            --command-id RunShellScript \
+            --scripts "sudo -u openclaw openclaw pairing approve telegram $CODE 2>&1" \
+            --query 'value[0].message' -o tsv)
+          echo "$RESULT"
+          echo "## Pairing Result" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$RESULT" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
