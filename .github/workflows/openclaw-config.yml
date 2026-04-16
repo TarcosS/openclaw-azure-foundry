@@ -94,14 +94,14 @@ jobs:
 
           chown -R openclaw:openclaw /home/openclaw/.openclaw
 
+          # Always use systemctl to ensure the service comes back even if it was stopped/crashed
+          systemctl restart openclaw
+          sleep 5
+          systemctl is-active openclaw
+
           OPENCLAW_BIN=/home/openclaw/.npm-global/bin/openclaw
           if [ -x "$OPENCLAW_BIN" ]; then
-            sudo -u openclaw "$OPENCLAW_BIN" gateway restart
             sudo -u openclaw "$OPENCLAW_BIN" status
-          else
-            echo "openclaw binary not found at $OPENCLAW_BIN, restarting systemd service"
-            systemctl restart openclaw
-            systemctl status openclaw --no-pager
           fi
           VMSCRIPT
 
