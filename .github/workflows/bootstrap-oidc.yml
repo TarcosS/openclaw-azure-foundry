@@ -278,26 +278,27 @@ jobs:
         run: |
           set -euo pipefail
 
-          gh variable set AZURE_CLIENT_ID --body "${{ steps.oidc.outputs.app_id }}"
-          gh variable set AZURE_TENANT_ID --body "${{ steps.context.outputs.tenant_id }}"
-          gh variable set AZURE_SUBSCRIPTION_ID --body "${{ steps.context.outputs.subscription_id }}"
+          REPO="${{ github.repository }}"
+          gh variable set AZURE_CLIENT_ID --repo "$REPO" --body "${{ steps.oidc.outputs.app_id }}"
+          gh variable set AZURE_TENANT_ID --repo "$REPO" --body "${{ steps.context.outputs.tenant_id }}"
+          gh variable set AZURE_SUBSCRIPTION_ID --repo "$REPO" --body "${{ steps.context.outputs.subscription_id }}"
 
           if [ -z "$SSH_PUBLIC_KEY" ]; then
             echo "ERROR: SSH public key could not be resolved." >&2
             exit 1
           fi
 
-          gh secret set SSH_PUBLIC_KEY --body "$SSH_PUBLIC_KEY"
+          gh secret set SSH_PUBLIC_KEY --repo "$REPO" --body "$SSH_PUBLIC_KEY"
 
           if [ "$SSH_SOURCE" = "generated" ]; then
             if [ -z "$SSH_PRIVATE_KEY" ]; then
               echo "ERROR: Generated SSH private key is empty." >&2
               exit 1
             fi
-            gh secret set "$SSH_PRIVATE_KEY_SECRET_NAME" --body "$SSH_PRIVATE_KEY"
+            gh secret set "$SSH_PRIVATE_KEY_SECRET_NAME" --repo "$REPO" --body "$SSH_PRIVATE_KEY"
           fi
 
-          gh secret set TELEGRAM_BOT_TOKEN --body '${{ inputs.telegram_bot_token }}'
+          gh secret set TELEGRAM_BOT_TOKEN --repo "$REPO" --body '${{ inputs.telegram_bot_token }}'
 
           echo "ssh_source=$SSH_SOURCE" >> "$GITHUB_OUTPUT"
           if [ "$SSH_SOURCE" = "generated" ]; then
