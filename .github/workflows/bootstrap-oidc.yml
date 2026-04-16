@@ -35,8 +35,6 @@ jobs:
       contents: read
       actions: write
       id-token: write
-      variables: write
-      secrets: write
 
     steps:
       - name: Validate Bootstrap OIDC Variables
@@ -272,7 +270,7 @@ jobs:
         id: repo_settings
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.BOOTSTRAP_GH_PAT }}
           SSH_PUBLIC_KEY: ${{ steps.ssh.outputs.public_key }}
           SSH_PRIVATE_KEY: ${{ steps.ssh.outputs.private_key }}
           SSH_SOURCE: ${{ steps.ssh.outputs.source }}
