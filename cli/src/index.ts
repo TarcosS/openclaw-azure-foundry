@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { collectConfig, configPath, loadConfig, saveConfig } from "./config.js";
-import { ask } from "./prompt.js";
+import { ask, askYesNo } from "./prompt.js";
 import { writeGeneratedParams } from "./params.js";
 import { findProjectRoot } from "./utils.js";
-import { preflightChecks, runDeployment } from "./azure.js";
+import { preflightChecks, runDeployment, runValidation, approvePairing } from "./azure.js";
 
 function helpText(): string {
   return `openclaw-azure-cli
@@ -53,10 +53,26 @@ async function handleDeploy(projectRoot: string): Promise<void> {
     token,
   );
 
-  console.log("Deployment completed.");
-  console.log("Next steps:");
-  console.log("1. Run scripts/validate-deployment.sh");
-  console.log("2. Test your Telegram bot");
+  console.log("\n✅ Deployment completed. Running validation...\n");
+  await runValidation(config);
+
+  console.log("\n✅ Validation complete.\n");
+  console.log("To pair your Telegram bot:");
+  console.log("1. Send any message to your bot on Telegram");
+  console.log("2. The bot will respond with a pairing code\n");
+
+  const wantPairing = await askYesNo("Do you have a pairing code to approve now?", true);
+  if (wantPairing) {
+    const pairingCode = await ask("Enter the pairing code from Telegram");
+    if (!pairingCode) {
+      throw new Error("Pairing code is required.");
+    }
+    await approvePairing(config, pairingCode);
+    console.log("\n🎉 Pairing approved! Send a message to your bot — you should get a GPT-4o response.");
+  } else {
+    console.log("\nYou can approve pairing later by running: openclaw-azure deploy");
+    console.log("Or manually: az vm run-command invoke -g <RG> -n <VM> --command-id RunShellScript --scripts \"sudo -u openclaw openclaw pairing approve telegram <CODE>\"");
+  }
 }
 
 async function main(): Promise<void> {

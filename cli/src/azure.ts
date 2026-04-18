@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { CliConfig } from "./types.js";
 import { runCommand, runOrThrow } from "./utils.js";
 
 export async function preflightChecks(): Promise<void> {
@@ -39,5 +40,55 @@ export async function runDeployment(
   const code = await runCommand("az", args);
   if (code !== 0) {
     throw new Error("Azure deployment failed.");
+  }
+}
+
+export async function runValidation(config: CliConfig): Promise<void> {
+  const rg = config.resourceGroupName;
+  const vm = config.vmName;
+
+  console.log("\n=== Checking cloud-init status ===");
+  await runCommand("az", [
+    "vm", "run-command", "invoke", "-g", rg, "-n", vm,
+    "--command-id", "RunShellScript",
+    "--scripts", "cloud-init status",
+  ]);
+
+  console.log("\n=== Checking OpenClaw service ===");
+  await runCommand("az", [
+    "vm", "run-command", "invoke", "-g", rg, "-n", vm,
+    "--command-id", "RunShellScript",
+    "--scripts", "systemctl status openclaw",
+  ]);
+
+  console.log("\n=== Checking OpenClaw status ===");
+  await runCommand("az", [
+    "vm", "run-command", "invoke", "-g", rg, "-n", vm,
+    "--command-id", "RunShellScript",
+    "--scripts", "sudo -u openclaw openclaw status",
+  ]);
+
+  console.log("\n=== Checking Private Endpoint DNS resolution ===");
+  await runCommand("az", [
+    "vm", "run-command", "invoke", "-g", rg, "-n", vm,
+    "--command-id", "RunShellScript",
+    "--scripts", `nslookup ${config.aiServicesName}.services.ai.azure.com`,
+  ]);
+}
+
+export async function approvePairing(config: CliConfig, pairingCode: string): Promise<void> {
+  const rg = config.resourceGroupName;
+  const vm = config.vmName;
+
+  console.log(`Approving pairing code: ${pairingCode}`);
+  const code = await runCommand("az", [
+    "vm", "run-command", "invoke",
+    "--resource-group", rg,
+    "--name", vm,
+    "--command-id", "RunShellScript",
+    "--scripts", `sudo -u openclaw /home/openclaw/.npm-global/bin/openclaw pairing approve telegram ${pairingCode} 2>&1`,
+  ]);
+  if (code !== 0) {
+    throw new Error("Pairing approval failed.");
   }
 }
