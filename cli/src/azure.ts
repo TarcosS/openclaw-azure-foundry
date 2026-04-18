@@ -93,30 +93,41 @@ export async function approvePairing(config: CliConfig, pairingCode: string): Pr
   }
 }
 
-export async function destroyResources(config: CliConfig): Promise<void> {
-  const rg = config.resourceGroupName;
-
-  console.log(`\nDeleting resource group: ${rg} ...`);
+export async function destroyResources(rgName: string): Promise<void> {
+  console.log(`\nDeleting resource group: ${rgName} ...`);
   const deleteCode = await runCommand("az", [
-    "group", "delete", "-n", rg, "--yes",
+    "group", "delete", "-n", rgName, "--yes",
   ]);
   if (deleteCode !== 0) {
-    throw new Error(`Failed to delete resource group ${rg}.`);
+    throw new Error(`Failed to delete resource group ${rgName}.`);
   }
-  console.log(`✅ Resource group ${rg} deleted.\n`);
+  console.log(`✅ Resource group ${rgName} deleted.\n`);
 
-  // Purge soft-deleted Cognitive Services (AI Services) to free model quota
-  console.log(`Purging soft-deleted AI Services: ${config.aiServicesName} ...`);
-  const aiCode = await runCommand("az", [
-    "cognitiveservices", "account", "purge",
-    "--name", config.aiServicesName,
-    "--resource-group", rg,
-    "--location", config.location,
-  ]);
-  if (aiCode === 0) {
-    console.log(`✅ AI Services ${config.aiServicesName} purged — model quota freed.`);
+  // Purge soft-deleted Cognitive Services that belonged to this RG to free model quota
+  console.log("Checking for soft-deleted AI Services to purge ...");
+  const result = await new Promise<string>((resolve) => {
+    import("node:child_process").then(({ execSync }) => {
+      try {
+        const out = execSync(
+          `az cognitiveservices account list-deleted --query "[?contains(id, '${rgName}')].[name, location]" -o json`,
+          { encoding: "utf-8" }
+        );
+        resolve(out);
+      } catch { resolve("[]"); }
+    });
+  });
+  const items = JSON.parse(result) as string[][];
+  for (const [name, location] of items) {
+    console.log(`  Purging: ${name} (${location}) ...`);
+    await runCommand("az", [
+      "cognitiveservices", "account", "purge",
+      "--name", name, "--resource-group", rgName, "--location", location,
+    ]);
+  }
+  if (items.length > 0) {
+    console.log(`✅ Purged ${items.length} soft-deleted AI Services — model quota freed.`);
   } else {
-    console.log(`⚠️  AI Services purge skipped (may not be in soft-deleted state).`);
+    console.log("  No soft-deleted AI Services found for this resource group.");
   }
 
   console.log("\n🧹 Destroy complete.");

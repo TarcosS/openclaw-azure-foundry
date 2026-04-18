@@ -77,22 +77,23 @@ async function handleDeploy(projectRoot: string): Promise<void> {
   }
 }
 
-async function handleDestroy(projectRoot: string): Promise<void> {
-  const config = await loadConfig(projectRoot);
-  if (!config) {
-    throw new Error("No valid config found. Run `openclaw-azure init` first.");
+async function handleDestroy(): Promise<void> {
+  const rgName = await ask("Enter the resource group name to destroy");
+  if (!rgName) {
+    console.log("No resource group name provided. Aborted.");
+    return;
   }
 
-  console.log(`\n⚠️  WARNING: This will permanently delete ALL resources in resource group "${config.resourceGroupName}"`);
-  console.log("  and purge soft-deleted Key Vault and AI Services to free quota.\n");
+  console.log(`\n⚠️  WARNING: This will permanently delete ALL resources in resource group "${rgName}"`);
+  console.log("  and purge soft-deleted AI Services to free quota.\n");
 
-  const confirm = await ask(`Type "${config.resourceGroupName}" to confirm`);
-  if (confirm !== config.resourceGroupName) {
+  const confirm = await ask(`Type "${rgName}" to confirm`);
+  if (confirm !== rgName) {
     console.log("Aborted.");
     return;
   }
 
-  await destroyResources(config);
+  await destroyResources(rgName);
 }
 
 async function main(): Promise<void> {
@@ -115,7 +116,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "destroy") {
-    await handleDestroy(projectRoot);
+    await handleDestroy();
     return;
   }
 
