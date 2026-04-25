@@ -1,4 +1,5 @@
 export type CliConfig = {
+  suffix: string;
   location: string;
   resourceGroupName: string;
   vnetName: string;

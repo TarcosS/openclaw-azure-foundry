@@ -70,3 +70,16 @@ export async function runOrThrow(command: string, args: string[], message: strin
     throw new Error(message);
   }
 }
+
+/** Run a command and capture its stdout as a string. Returns { code, stdout }. */
+export function runCapture(command: string, args: string[]): Promise<{ code: number; stdout: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["inherit", "pipe", "inherit"] });
+    const chunks: Buffer[] = [];
+    child.stdout!.on("data", (chunk: Buffer) => chunks.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({ code: code ?? 1, stdout: Buffer.concat(chunks).toString("utf8").trim() });
+    });
+  });
+}
