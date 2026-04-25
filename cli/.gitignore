@@ -1,2 +1,19 @@
 node_modules/
 dist/
+
+# CLI local state (SSH keys, config, deployment params)
+.openclaw-azure/
+
+# npm pack output
+*.tgz
+
+# OS files
+.DS_Store
+
+# Editor
+.vscode/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
