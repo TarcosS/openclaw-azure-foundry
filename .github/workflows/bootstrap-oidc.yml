@@ -63,26 +63,26 @@ jobs:
       - name: Validate Azure Context
         id: context
         shell: bash
+        env:
+          TARGET_TENANT_ID: ${{ inputs.target_tenant_id }}
+          TARGET_SUBSCRIPTION_ID: ${{ inputs.target_subscription_id }}
         run: |
           set -euo pipefail
-
-          targetTenantId='${{ inputs.target_tenant_id }}'
-          targetSubscriptionId='${{ inputs.target_subscription_id }}'
 
           currentTenantId=$(az account show --query tenantId -o tsv)
           currentSubscriptionId=$(az account show --query id -o tsv)
 
-          if [ -n "$targetTenantId" ] && [ "$currentTenantId" != "$targetTenantId" ]; then
-            echo "ERROR: Active tenant ($currentTenantId) does not match target tenant ($targetTenantId)." >&2
+          if [ -n "$TARGET_TENANT_ID" ] && [ "$currentTenantId" != "$TARGET_TENANT_ID" ]; then
+            echo "ERROR: Active tenant ($currentTenantId) does not match target tenant ($TARGET_TENANT_ID)." >&2
             echo "Update BOOTSTRAP_AZURE_TENANT_ID or target_tenant_id and re-run." >&2
             exit 1
           fi
 
-          if [ -n "$targetSubscriptionId" ] && [ "$currentSubscriptionId" != "$targetSubscriptionId" ]; then
-            az account set --subscription "$targetSubscriptionId"
+          if [ -n "$TARGET_SUBSCRIPTION_ID" ] && [ "$currentSubscriptionId" != "$TARGET_SUBSCRIPTION_ID" ]; then
+            az account set --subscription "$TARGET_SUBSCRIPTION_ID"
             currentSubscriptionId=$(az account show --query id -o tsv)
-            if [ "$currentSubscriptionId" != "$targetSubscriptionId" ]; then
-              echo "ERROR: Active subscription ($currentSubscriptionId) does not match target subscription ($targetSubscriptionId)." >&2
+            if [ "$currentSubscriptionId" != "$TARGET_SUBSCRIPTION_ID" ]; then
+              echo "ERROR: Active subscription ($currentSubscriptionId) does not match target subscription ($TARGET_SUBSCRIPTION_ID)." >&2
               exit 1
             fi
           fi
@@ -92,13 +92,16 @@ jobs:
 
       - name: Mask Sensitive Inputs
         shell: bash
+        env:
+          TELEGRAM_TOKEN: ${{ inputs.telegram_bot_token }}
+          SSH_KEY: ${{ inputs.ssh_public_key }}
         run: |
           set -euo pipefail
-          if [ -n '${{ inputs.telegram_bot_token }}' ]; then
-            echo '::add-mask::${{ inputs.telegram_bot_token }}'
+          if [ -n "$TELEGRAM_TOKEN" ]; then
+            echo "::add-mask::$TELEGRAM_TOKEN"
           fi
-          if [ -n '${{ inputs.ssh_public_key }}' ]; then
-            echo '::add-mask::${{ inputs.ssh_public_key }}'
+          if [ -n "$SSH_KEY" ]; then
+            echo "::add-mask::$SSH_KEY"
           fi
 
       - name: Resolve SSH Key Material
@@ -146,12 +149,12 @@ jobs:
       - name: Create App Registration, SPN, and Federated Credentials
         id: oidc
         shell: bash
+        env:
+          APP_NAME: ${{ inputs.app_name }}
+          REPO: ${{ github.repository }}
+          SUBSCRIPTION_ID: ${{ steps.context.outputs.subscription_id }}
         run: |
           set -euo pipefail
-
-          APP_NAME='${{ inputs.app_name }}'
-          REPO='${{ github.repository }}'
-          SUBSCRIPTION_ID='${{ steps.context.outputs.subscription_id }}'
 
           appId=$(az ad app list --display-name "$APP_NAME" --query "[0].appId" -o tsv)
           if [ -z "$appId" ]; then
@@ -277,13 +280,17 @@ jobs:
           SSH_PRIVATE_KEY: ${{ steps.ssh.outputs.private_key }}
           SSH_SOURCE: ${{ steps.ssh.outputs.source }}
           SSH_PRIVATE_KEY_SECRET_NAME: ${{ inputs.ssh_private_key_secret_name }}
+          TELEGRAM_TOKEN: ${{ inputs.telegram_bot_token }}
+          OIDC_APP_ID: ${{ steps.oidc.outputs.app_id }}
+          OIDC_TENANT_ID: ${{ steps.context.outputs.tenant_id }}
+          OIDC_SUBSCRIPTION_ID: ${{ steps.context.outputs.subscription_id }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
-          REPO="${{ github.repository }}"
-          gh variable set AZURE_CLIENT_ID --repo "$REPO" --body "${{ steps.oidc.outputs.app_id }}"
-          gh variable set AZURE_TENANT_ID --repo "$REPO" --body "${{ steps.context.outputs.tenant_id }}"
-          gh variable set AZURE_SUBSCRIPTION_ID --repo "$REPO" --body "${{ steps.context.outputs.subscription_id }}"
+          gh variable set AZURE_CLIENT_ID --repo "$REPO" --body "$OIDC_APP_ID"
+          gh variable set AZURE_TENANT_ID --repo "$REPO" --body "$OIDC_TENANT_ID"
+          gh variable set AZURE_SUBSCRIPTION_ID --repo "$REPO" --body "$OIDC_SUBSCRIPTION_ID"
 
           if [ -z "$SSH_PUBLIC_KEY" ]; then
             echo "ERROR: SSH public key could not be resolved." >&2
@@ -300,7 +307,7 @@ jobs:
             gh secret set "$SSH_PRIVATE_KEY_SECRET_NAME" --repo "$REPO" --body "$SSH_PRIVATE_KEY"
           fi
 
-          gh secret set TELEGRAM_BOT_TOKEN --repo "$REPO" --body '${{ inputs.telegram_bot_token }}'
+          gh secret set TELEGRAM_BOT_TOKEN --repo "$REPO" --body "$TELEGRAM_TOKEN"
 
           echo "ssh_source=$SSH_SOURCE" >> "$GITHUB_OUTPUT"
           if [ "$SSH_SOURCE" = "generated" ]; then

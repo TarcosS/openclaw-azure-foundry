@@ -1,0 +1,46 @@
+name: CLI CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "cli/**"
+      - ".changeset/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Install dependencies
+        working-directory: cli
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: cli
+        run: npm run typecheck
+
+      - name: Unit tests
+        working-directory: cli
+        run: npm test
+
+      - name: Build
+        working-directory: cli
+        run: npm run build
+
+      - name: Lint Bicep templates
+        run: az bicep build --file cli/infrastructure/main.bicep --stdout > /dev/null
+
+      - name: Verify package contents
+        working-directory: cli
+        run: npm pack --dry-run

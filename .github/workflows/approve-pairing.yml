@@ -36,13 +36,16 @@ jobs:
           echo "Resolved: RG=$RG VM=$VM"
 
       - name: Approve Pairing
+        env:
+          CODE: ${{ inputs.pairing_code }}
+          RG: ${{ steps.resolve.outputs.rg }}
+          VM: ${{ steps.resolve.outputs.vm }}
         run: |
           set -euo pipefail
-          CODE='${{ inputs.pairing_code }}'
           echo "Approving pairing code: $CODE"
           RESULT=$(az vm run-command invoke \
-            --resource-group "${{ steps.resolve.outputs.rg }}" \
-            --name "${{ steps.resolve.outputs.vm }}" \
+            --resource-group "$RG" \
+            --name "$VM" \
             --command-id RunShellScript \
             --scripts "sudo -u openclaw /home/openclaw/.npm-global/bin/openclaw pairing approve telegram $CODE 2>&1" \
             --query 'value[0].message' -o tsv)

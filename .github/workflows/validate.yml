@@ -3,9 +3,14 @@ name: Validate
 on:
   pull_request:
     branches: [main]
+    paths:
+      - "infrastructure/**"
+      - "cli/infrastructure/**"
+      - "scripts/**"
 
 jobs:
   validate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -36,3 +41,32 @@ jobs:
         run: |
           sudo apt-get install -y shellcheck
           shellcheck scripts/*.sh
+
+  cli:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Install dependencies
+        working-directory: cli
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: cli
+        run: npm run typecheck
+
+      - name: Unit tests
+        working-directory: cli
+        run: npm test
+
+      - name: Build
+        working-directory: cli
+        run: npm run build

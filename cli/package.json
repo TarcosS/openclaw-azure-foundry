@@ -1,20 +1,49 @@
 {
   "name": "openclaw-azure-cli",
-  "version": "0.1.0",
-  "description": "CLI to deploy OpenClaw Azure Foundry infrastructure without forking the repo",
+  "version": "0.1.0-beta.2",
+  "description": "CLI to deploy OpenClaw on Azure AI Foundry — no repo clone needed",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "openclaw-azure": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "infrastructure",
+    "openclaw-config"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
     "dev": "node --loader ts-node/esm src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "openclaw",
+    "azure",
+    "ai-foundry",
+    "cli",
+    "telegram",
+    "gpt-4o"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hkaanturgut/openclaw-azure-foundry.git",
+    "directory": "cli"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^3.2.4"
   }
 }

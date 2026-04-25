@@ -13,6 +13,9 @@ function ensureLength(value: string, min: number, max: number, field: string): v
 }
 
 export function validateConfig(config: CliConfig): void {
+  ensureLength(config.suffix, 1, 20, "suffix");
+  ensureRegex(config.suffix, /^[a-z0-9\-]+$/, "suffix must be lowercase letters, numbers, and dashes only.");
+
   ensureRegex(config.resourceGroupName, /^[a-zA-Z0-9._()\-]{1,90}$/, "resourceGroupName has invalid characters.");
   ensureRegex(config.vnetName, /^[a-zA-Z0-9._\-]{2,64}$/, "vnetName has invalid format.");
   ensureRegex(config.vmName, /^[a-zA-Z0-9\-]{1,64}$/, "vmName has invalid format.");

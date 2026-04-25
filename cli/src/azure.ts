@@ -1,16 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { CliConfig } from "./types.js";
-import { runCommand, runOrThrow } from "./utils.js";
+import { runCommand, runOrThrow, runCapture, getTemplatePath } from "./utils.js";
 
 export async function preflightChecks(): Promise<void> {
   await runOrThrow("az", ["--version"], "Azure CLI is not installed or not in PATH.");
-  await runOrThrow("az", ["account", "show", "-o", "none"], "No active Azure login. Run `az login`.");
   await runOrThrow("az", ["bicep", "version"], "Bicep support is not available. Run `az bicep install`.");
 }
 
 export async function runDeployment(
-  projectRoot: string,
   location: string,
   paramsPath: string,
   sshPublicKeyPath: string,
@@ -28,9 +26,9 @@ export async function runDeployment(
     "--location",
     location,
     "--template-file",
-    path.join(projectRoot, "infrastructure", "main.bicep"),
+    getTemplatePath(),
     "--parameters",
-    paramsPath,
+    `@${paramsPath}`,
     "--parameters",
     `sshPublicKey=${sshKey}`,
     "--parameters",
@@ -74,6 +72,93 @@ export async function runValidation(config: CliConfig): Promise<void> {
     "--command-id", "RunShellScript",
     "--scripts", `nslookup ${config.aiServicesName}.services.ai.azure.com`,
   ]);
+}
+
+const READY_POLL_INTERVAL_SEC = 30;
+const READY_POLL_MAX_ATTEMPTS = 20; // 10 minutes total
+
+/** Poll the VM until cloud-init is done and the openclaw service is active. */
+export async function waitForReady(config: CliConfig): Promise<void> {
+  const rg = config.resourceGroupName;
+  const vm = config.vmName;
+
+  console.log("Waiting for OpenClaw to become ready (this can take 5-10 minutes)...\n");
+
+  for (let attempt = 1; attempt <= READY_POLL_MAX_ATTEMPTS; attempt++) {
+    const elapsed = (attempt - 1) * READY_POLL_INTERVAL_SEC;
+    process.stdout.write(`  [${elapsed}s] Checking cloud-init & service status (attempt ${attempt}/${READY_POLL_MAX_ATTEMPTS})...`);
+
+    const { stdout } = await runCapture("az", [
+      "vm", "run-command", "invoke", "-g", rg, "-n", vm,
+      "--command-id", "RunShellScript",
+      "--scripts", "cloud-init status --long && systemctl is-active openclaw",
+      "--query", "value[0].message", "-o", "tsv",
+    ]);
+
+    const cloudInitDone = /status:\s*done/i.test(stdout);
+    const serviceActive = /\bactive\b/.test(stdout);
+
+    if (cloudInitDone && serviceActive) {
+      console.log(" ready ✅");
+      return;
+    }
+
+    const reason = !cloudInitDone ? "cloud-init still running" : "openclaw service not active";
+    console.log(` not ready (${reason})`);
+
+    if (attempt < READY_POLL_MAX_ATTEMPTS) {
+      await new Promise((r) => setTimeout(r, READY_POLL_INTERVAL_SEC * 1000));
+    }
+  }
+
+  throw new Error(
+    "OpenClaw did not become ready within the timeout. " +
+    "SSH into the VM and check: cloud-init status, journalctl -u openclaw",
+  );
+}
+
+/** Ensure user is logged in to the correct Azure tenant/subscription. */
+export async function ensureAzLogin(): Promise<void> {
+  // Check if already logged in
+  const { code, stdout } = await runCapture("az", [
+    "account", "show", "--query", "{name:name, id:id, tenantId:tenantId}", "-o", "json",
+  ]);
+
+  if (code === 0 && stdout) {
+    const acct = JSON.parse(stdout) as { name: string; id: string; tenantId: string };
+    console.log(`\nCurrently logged in to Azure:`);
+    console.log(`  Subscription: ${acct.name} (${acct.id})`);
+    console.log(`  Tenant:       ${acct.tenantId}\n`);
+
+    const { askYesNo } = await import("./prompt.js");
+    const ok = await askYesNo("Continue with this subscription?", true);
+    if (ok) return;
+
+    console.log("Opening browser for Azure login...\n");
+  } else {
+    console.log("No active Azure login found. Opening browser for login...\n");
+  }
+
+  const loginCode = await runCommand("az", ["login"]);
+  if (loginCode !== 0) {
+    throw new Error("Azure login failed.");
+  }
+
+  // Let user pick subscription
+  const listCode = await runCommand("az", ["account", "list", "--query", "[].{name:name, id:id, isDefault:isDefault}", "-o", "table"]);
+  if (listCode !== 0) {
+    throw new Error("Failed to list Azure subscriptions.");
+  }
+
+  const { ask } = await import("./prompt.js");
+  const subId = await ask("Enter subscription ID to use (leave blank for current default)");
+  if (subId) {
+    const setCode = await runCommand("az", ["account", "set", "--subscription", subId]);
+    if (setCode !== 0) {
+      throw new Error(`Failed to set subscription ${subId}.`);
+    }
+    console.log(`✅ Subscription set to ${subId}`);
+  }
 }
 
 export async function approvePairing(rgName: string, vmName: string, pairingCode: string): Promise<void> {
