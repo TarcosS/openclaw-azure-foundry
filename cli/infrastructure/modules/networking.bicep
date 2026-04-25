@@ -37,6 +37,27 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
   }
 }
 
+// Public IP for NAT Gateway (outbound-only, no inbound access)
+resource natGatewayPip 'Microsoft.Network/publicIPAddresses@2023-09-01' = {
+  name: 'pip-nat-${vnetName}'
+  location: location
+  sku: { name: 'Standard' }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+  }
+}
+
+// NAT Gateway for outbound internet (e.g. Telegram API polling)
+resource natGateway 'Microsoft.Network/natGateways@2023-09-01' = {
+  name: 'nat-${vnetName}'
+  location: location
+  sku: { name: 'Standard' }
+  properties: {
+    idleTimeoutInMinutes: 10
+    publicIpAddresses: [{ id: natGatewayPip.id }]
+  }
+}
+
 // Virtual Network
 resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
   name: vnetName
@@ -53,6 +74,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
           networkSecurityGroup: {
             id: nsg.id
           }
+          natGateway: { id: natGateway.id }
           privateEndpointNetworkPolicies: 'Enabled'
         }
       }
