@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "cli/**"
+      - ".changeset/**"
 
 jobs:
   build:
@@ -26,7 +27,11 @@ jobs:
         working-directory: cli
         run: npm run build
 
-      # Uncomment when tests are added:
-      # - name: Test
+      - name: Lint Bicep templates
+        run: az bicep build --file cli/infrastructure/main.bicep --stdout > /dev/null
+
+      - name: Verify package contents
+        working-directory: cli
+        run: npm pack --dry-run
       #   working-directory: cli
       #   run: npm test
