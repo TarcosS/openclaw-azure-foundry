@@ -123,6 +123,36 @@ describe("validateConfig", () => {
     });
   });
 
+  // hubName
+  describe("hubName", () => {
+    it("rejects single char", () => {
+      expect(() => validateConfig(validConfig({ hubName: "h" }))).toThrow("hubName");
+    });
+
+    it("rejects special characters", () => {
+      expect(() => validateConfig(validConfig({ hubName: "hub@test" }))).toThrow("hubName");
+    });
+
+    it("accepts valid hub name", () => {
+      expect(() => validateConfig(validConfig({ hubName: "hub-prod-01" }))).not.toThrow();
+    });
+  });
+
+  // projectName
+  describe("projectName", () => {
+    it("rejects single char", () => {
+      expect(() => validateConfig(validConfig({ projectName: "p" }))).toThrow("projectName");
+    });
+
+    it("rejects special characters", () => {
+      expect(() => validateConfig(validConfig({ projectName: "proj_test!" }))).toThrow("projectName");
+    });
+
+    it("accepts valid project name", () => {
+      expect(() => validateConfig(validConfig({ projectName: "proj-dev" }))).not.toThrow();
+    });
+  });
+
   // numeric fields
   describe("osDiskSizeGb", () => {
     it("rejects disk size below 30", () => {

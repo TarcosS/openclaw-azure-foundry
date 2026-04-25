@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { expandTilde } from "../utils.js";
+import { expandTilde, getStateDir, getPackageDir, getTemplatePath } from "../utils.js";
 import os from "node:os";
 import path from "node:path";
 
@@ -24,5 +24,23 @@ describe("expandTilde", () => {
 
   it("returns relative paths unchanged", () => {
     expect(expandTilde("keys/id.pub")).toBe("keys/id.pub");
+  });
+});
+
+describe("getStateDir", () => {
+  it("returns .openclaw-azure under cwd", () => {
+    expect(getStateDir()).toBe(path.join(process.cwd(), ".openclaw-azure"));
+  });
+});
+
+describe("getPackageDir", () => {
+  it("returns an absolute path", () => {
+    expect(path.isAbsolute(getPackageDir())).toBe(true);
+  });
+});
+
+describe("getTemplatePath", () => {
+  it("ends with infrastructure/main.bicep", () => {
+    expect(getTemplatePath()).toMatch(/infrastructure[/\\]main\.bicep$/);
   });
 });

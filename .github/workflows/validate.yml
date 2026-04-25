@@ -10,6 +10,7 @@ on:
 
 jobs:
   validate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -43,6 +44,8 @@ jobs:
 
   cli:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
