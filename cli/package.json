@@ -32,8 +32,7 @@
     "directory": "cli"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
