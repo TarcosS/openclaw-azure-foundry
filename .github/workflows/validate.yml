@@ -3,6 +3,9 @@ name: Validate
 on:
   pull_request:
     branches: [main]
+    paths:
+      - "infrastructure/**"
+      - "scripts/**"
 
 jobs:
   validate:
