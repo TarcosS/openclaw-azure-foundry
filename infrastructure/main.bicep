@@ -70,21 +70,33 @@ module networking 'modules/networking.bicep' = {
   dependsOn: [rg]
 }
 
-// 2. AI Foundry (AI Services + Hub + Project)
-module aiFoundry 'modules/ai-foundry.bicep' = {
-  name: 'ai-foundry'
+// 2a. AI Foundry Base (AI Services + Hub + Storage)
+module aiFoundryBase 'modules/ai-foundry-base.bicep' = {
+  name: 'ai-foundry-base'
+  scope: resourceGroup(resourceGroupName)
+  params: {
+    location: location
+    aiServicesName: aiServicesName
+    hubName: hubName
+    storageAccountName: storageAccountName
+  }
+  dependsOn: [rg]
+}
+
+// 2b. AI Foundry Project (model deployment + connection + project)
+module aiFoundryProject 'modules/ai-foundry-project.bicep' = {
+  name: 'ai-foundry-project'
   scope: resourceGroup(resourceGroupName)
   params: {
     location: location
     aiServicesName: aiServicesName
     hubName: hubName
     projectName: projectName
-    storageAccountName: storageAccountName
     modelName: modelName
     modelVersion: modelVersion
     modelCapacity: modelCapacity
   }
-  dependsOn: [rg]
+  dependsOn: [aiFoundryBase]
 }
 
 // 3. Compute (deployed before keyvault to get the principalId)
@@ -111,7 +123,7 @@ module keyvault 'modules/keyvault.bicep' = {
   params: {
     location: location
     keyVaultName: keyVaultName
-    foundryApiKey: aiFoundry.outputs.foundryApiKey
+    foundryApiKey: aiFoundryBase.outputs.foundryApiKey
     telegramBotToken: telegramBotToken
     vmPrincipalId: compute.outputs.vmPrincipalId
   }
@@ -124,8 +136,8 @@ module privateEndpoints 'modules/private-endpoints.bicep' = {
   params: {
     location: location
     peSubnetId: networking.outputs.peSubnetId
-    aiServicesId: aiFoundry.outputs.aiServicesId
-    hubId: aiFoundry.outputs.hubId
+    aiServicesId: aiFoundryBase.outputs.aiServicesId
+    hubId: aiFoundryBase.outputs.hubId
     keyVaultId: keyvault.outputs.keyVaultId
     openaiPrivateDnsZoneId: networking.outputs.openaiPrivateDnsZoneId
     aiServicesDnsZoneId: networking.outputs.aiServicesDnsZoneId
@@ -136,6 +148,6 @@ module privateEndpoints 'modules/private-endpoints.bicep' = {
 output resourceGroupName string = resourceGroupName
 output vmName string = vmName
 output keyVaultName string = keyvault.outputs.keyVaultName
-output aiServicesEndpoint string = aiFoundry.outputs.aiServicesEndpoint
-output hubId string = aiFoundry.outputs.hubId
-output projectId string = aiFoundry.outputs.projectId
+output aiServicesEndpoint string = aiFoundryBase.outputs.aiServicesEndpoint
+output hubId string = aiFoundryBase.outputs.hubId
+output projectId string = aiFoundryProject.outputs.projectId

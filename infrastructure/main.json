@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.42.1.51946",
-      "templateHash": "1339539134476394335"
+      "templateHash": "11898147797899535250"
     }
   },
   "parameters": {
@@ -342,10 +342,10 @@
         "rg"
       ]
     },
-    "aiFoundry": {
+    "aiFoundryBase": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "ai-foundry",
+      "name": "ai-foundry-base",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -362,20 +362,8 @@
           "hubName": {
             "value": "[parameters('hubName')]"
           },
-          "projectName": {
-            "value": "[parameters('projectName')]"
-          },
           "storageAccountName": {
             "value": "[parameters('storageAccountName')]"
-          },
-          "modelName": {
-            "value": "[parameters('modelName')]"
-          },
-          "modelVersion": {
-            "value": "[parameters('modelVersion')]"
-          },
-          "modelCapacity": {
-            "value": "[parameters('modelCapacity')]"
           }
         },
         "template": {
@@ -386,7 +374,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "1415885754165632626"
+              "templateHash": "14803368829503959075"
             }
           },
           "parameters": {
@@ -399,23 +387,8 @@
             "hubName": {
               "type": "string"
             },
-            "projectName": {
-              "type": "string"
-            },
             "storageAccountName": {
               "type": "string"
-            },
-            "modelName": {
-              "type": "string",
-              "defaultValue": "gpt-4o"
-            },
-            "modelVersion": {
-              "type": "string",
-              "defaultValue": "2024-11-20"
-            },
-            "modelCapacity": {
-              "type": "int",
-              "defaultValue": 30
             }
           },
           "resources": {
@@ -451,26 +424,6 @@
                 "customSubDomainName": "[parameters('aiServicesName')]"
               }
             },
-            "modelDeployment": {
-              "condition": "[not(empty(parameters('modelName')))]",
-              "type": "Microsoft.CognitiveServices/accounts/deployments",
-              "apiVersion": "2024-10-01",
-              "name": "[format('{0}/{1}', parameters('aiServicesName'), if(not(empty(parameters('modelName'))), parameters('modelName'), 'placeholder'))]",
-              "sku": {
-                "name": "Standard",
-                "capacity": "[parameters('modelCapacity')]"
-              },
-              "properties": {
-                "model": {
-                  "format": "OpenAI",
-                  "name": "[parameters('modelName')]",
-                  "version": "[parameters('modelVersion')]"
-                }
-              },
-              "dependsOn": [
-                "aiServices"
-              ]
-            },
             "hub": {
               "type": "Microsoft.MachineLearningServices/workspaces",
               "apiVersion": "2024-07-01-preview",
@@ -488,46 +441,6 @@
               "dependsOn": [
                 "storageAccount"
               ]
-            },
-            "aiServicesConnection": {
-              "type": "Microsoft.MachineLearningServices/workspaces/connections",
-              "apiVersion": "2024-07-01-preview",
-              "name": "[format('{0}/{1}', parameters('hubName'), 'ai-services-connection')]",
-              "properties": {
-                "category": "AIServices",
-                "target": "[reference('aiServices').endpoint]",
-                "authType": "ApiKey",
-                "isSharedToAll": true,
-                "credentials": {
-                  "key": "[listKeys('aiServices', '2024-10-01').key1]"
-                },
-                "metadata": {
-                  "ApiType": "Azure",
-                  "ResourceId": "[resourceId('Microsoft.CognitiveServices/accounts', parameters('aiServicesName'))]"
-                }
-              },
-              "dependsOn": [
-                "aiServices",
-                "hub"
-              ]
-            },
-            "project": {
-              "type": "Microsoft.MachineLearningServices/workspaces",
-              "apiVersion": "2024-07-01-preview",
-              "name": "[parameters('projectName')]",
-              "location": "[parameters('location')]",
-              "kind": "Project",
-              "identity": {
-                "type": "SystemAssigned"
-              },
-              "properties": {
-                "hubResourceId": "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('hubName'))]",
-                "publicNetworkAccess": "Disabled",
-                "friendlyName": "[parameters('projectName')]"
-              },
-              "dependsOn": [
-                "hub"
-              ]
             }
           },
           "outputs": {
@@ -538,10 +451,6 @@
             "hubId": {
               "type": "string",
               "value": "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('hubName'))]"
-            },
-            "projectId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('projectName'))]"
             },
             "storageAccountId": {
               "type": "string",
@@ -560,6 +469,145 @@
       },
       "dependsOn": [
         "rg"
+      ]
+    },
+    "aiFoundryProject": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "ai-foundry-project",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "aiServicesName": {
+            "value": "[parameters('aiServicesName')]"
+          },
+          "hubName": {
+            "value": "[parameters('hubName')]"
+          },
+          "projectName": {
+            "value": "[parameters('projectName')]"
+          },
+          "modelName": {
+            "value": "[parameters('modelName')]"
+          },
+          "modelVersion": {
+            "value": "[parameters('modelVersion')]"
+          },
+          "modelCapacity": {
+            "value": "[parameters('modelCapacity')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.42.1.51946",
+              "templateHash": "12187548868687213677"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "aiServicesName": {
+              "type": "string"
+            },
+            "hubName": {
+              "type": "string"
+            },
+            "projectName": {
+              "type": "string"
+            },
+            "modelName": {
+              "type": "string",
+              "defaultValue": "gpt-4o"
+            },
+            "modelVersion": {
+              "type": "string",
+              "defaultValue": "2024-11-20"
+            },
+            "modelCapacity": {
+              "type": "int",
+              "defaultValue": 30
+            }
+          },
+          "resources": [
+            {
+              "condition": "[not(empty(parameters('modelName')))]",
+              "type": "Microsoft.CognitiveServices/accounts/deployments",
+              "apiVersion": "2024-10-01",
+              "name": "[format('{0}/{1}', parameters('aiServicesName'), if(not(empty(parameters('modelName'))), parameters('modelName'), 'placeholder'))]",
+              "sku": {
+                "name": "Standard",
+                "capacity": "[parameters('modelCapacity')]"
+              },
+              "properties": {
+                "model": {
+                  "format": "OpenAI",
+                  "name": "[parameters('modelName')]",
+                  "version": "[parameters('modelVersion')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.MachineLearningServices/workspaces/connections",
+              "apiVersion": "2024-07-01-preview",
+              "name": "[format('{0}/{1}', parameters('hubName'), 'ai-services-connection')]",
+              "properties": {
+                "category": "AIServices",
+                "target": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('aiServicesName')), '2024-10-01').endpoint]",
+                "authType": "ApiKey",
+                "isSharedToAll": true,
+                "credentials": {
+                  "key": "[listKeys(resourceId('Microsoft.CognitiveServices/accounts', parameters('aiServicesName')), '2024-10-01').key1]"
+                },
+                "metadata": {
+                  "ApiType": "Azure",
+                  "ResourceId": "[resourceId('Microsoft.CognitiveServices/accounts', parameters('aiServicesName'))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.CognitiveServices/accounts/deployments', parameters('aiServicesName'), if(not(empty(parameters('modelName'))), parameters('modelName'), 'placeholder'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.MachineLearningServices/workspaces",
+              "apiVersion": "2024-07-01-preview",
+              "name": "[parameters('projectName')]",
+              "location": "[parameters('location')]",
+              "kind": "Project",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "hubResourceId": "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('hubName'))]",
+                "publicNetworkAccess": "Disabled",
+                "friendlyName": "[parameters('projectName')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces/connections', parameters('hubName'), 'ai-services-connection')]"
+              ]
+            }
+          ],
+          "outputs": {
+            "projectId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('projectName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "aiFoundryBase"
       ]
     },
     "compute": {
@@ -608,7 +656,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.42.1.51946",
-              "templateHash": "16415751536017007294"
+              "templateHash": "11098925147216959115"
             }
           },
           "parameters": {
@@ -644,7 +692,7 @@
             }
           },
           "variables": {
-            "cloudInitRaw": "#cloud-config\npackage_update: true\npackage_upgrade: true\n\npackages:\n  - curl\n  - jq\n  - unzip\n\nruncmd:\n  # Install Node.js LTS\n  - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -\n  - apt-get install -y nodejs\n\n  # Install Azure CLI\n  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash\n\n  # Login with managed identity\n  - az login --identity --allow-no-subscriptions\n\n  # Pull secrets from Key Vault (retry loop for role assignment propagation)\n  - |\n    for i in $(seq 1 30); do\n      FOUNDRY_API_KEY=$(az keyvault secret show --vault-name \"${KEY_VAULT_NAME}\" --name foundry-api-key --query value -o tsv 2>/dev/null) && break\n      echo \"Waiting for Key Vault access (attempt $i/30)...\"\n      sleep 10\n    done\n  - TELEGRAM_BOT_TOKEN=$(az keyvault secret show --vault-name \"${KEY_VAULT_NAME}\" --name telegram-bot-token --query value -o tsv)\n  - FOUNDRY_ENDPOINT=\"https://${AI_FOUNDRY_ACCOUNT_NAME}.services.ai.azure.com/\"\n\n  # Install OpenClaw as the admin user (non-interactive)\n  - OPENCLAW_NONINTERACTIVE=1 sudo -u ${ADMIN_USERNAME} -i bash -c 'curl -fsSL https://openclaw.ai/install.sh | bash'\n\n  # Create config directory\n  - mkdir -p /home/${ADMIN_USERNAME}/.openclaw/agents/main/agent\n  - mkdir -p /home/${ADMIN_USERNAME}/.openclaw/workspace\n\n  # Write openclaw.json\n  - |\n    cat > /home/${ADMIN_USERNAME}/.openclaw/openclaw.json << OCEOF\n    {\n      \"models\": {\n        \"mode\": \"merge\",\n        \"providers\": {\n          \"azure-openai-responses\": {\n            \"baseUrl\": \"$FOUNDRY_ENDPOINT\",\n            \"apiKey\": \"$FOUNDRY_API_KEY\",\n            \"api\": \"openai-responses\",\n            \"authHeader\": false,\n            \"headers\": {\n              \"api-key\": \"$FOUNDRY_API_KEY\"\n            },\n            \"models\": [\n              {\n                \"id\": \"gpt-4o\",\n                \"name\": \"GPT-5.4-mini (Azure Foundry)\",\n                \"reasoning\": false,\n                \"input\": [\"text\"],\n                \"cost\": { \"input\": 0, \"output\": 0, \"cacheRead\": 0, \"cacheWrite\": 0 },\n                \"contextWindow\": 128000,\n                \"maxTokens\": 16384,\n                \"compat\": { \"supportsStore\": false }\n              }\n            ]\n          }\n        }\n      },\n      \"agents\": {\n        \"defaults\": {\n          \"model\": { \"primary\": \"azure-openai-responses/gpt-4o\" },\n          \"models\": { \"azure-openai-responses/gpt-4o\": {} },\n          \"workspace\": \"/home/${ADMIN_USERNAME}/.openclaw/workspace\"\n        },\n        \"list\": [\n          {\n            \"id\": \"main\",\n            \"name\": \"main\",\n            \"workspace\": \"/home/${ADMIN_USERNAME}/.openclaw/workspace\",\n            \"agentDir\": \"/home/${ADMIN_USERNAME}/.openclaw/agents/main/agent\",\n            \"model\": \"azure-openai-responses/gpt-4o\"\n          }\n        ]\n      },\n      \"channels\": {\n        \"telegram\": {\n          \"enabled\": true,\n          \"dmPolicy\": \"pairing\",\n          \"botToken\": \"$TELEGRAM_BOT_TOKEN\",\n          \"groupPolicy\": \"allowlist\",\n          \"streaming\": \"partial\"\n        }\n      },\n      \"gateway\": { \"port\": 18789, \"mode\": \"local\", \"bind\": \"loopback\" },\n      \"browser\": { \"enabled\": false },\n      \"tools\": { \"profile\": \"coding\", \"web\": { \"search\": { \"enabled\": false } } },\n      \"commands\": { \"native\": \"auto\", \"restart\": true },\n      \"session\": { \"dmScope\": \"per-channel-peer\" }\n    }\n    OCEOF\n\n  # Write auth-profiles.json\n  - |\n    cat > /home/${ADMIN_USERNAME}/.openclaw/agents/main/agent/auth-profiles.json << APEOF\n    {\n      \"version\": 1,\n      \"profiles\": {\n        \"azure-openai-responses:default\": {\n          \"type\": \"api_key\",\n          \"provider\": \"azure-openai-responses\",\n          \"key\": \"$FOUNDRY_API_KEY\"\n        }\n      },\n      \"lastGood\": {\n        \"azure-openai-responses\": \"azure-openai-responses:default\"\n      }\n    }\n    APEOF\n\n  # Fix ownership\n  - chown -R ${ADMIN_USERNAME}:${ADMIN_USERNAME} /home/${ADMIN_USERNAME}/.openclaw\n\n  # Determine openclaw binary path (installer puts it in .npm-global/bin)\n  - OPENCLAW_BIN=$(sudo -u ${ADMIN_USERNAME} -i bash -c 'command -v openclaw 2>/dev/null || echo /home/${ADMIN_USERNAME}/.npm-global/bin/openclaw')\n\n  # Create systemd service\n  - |\n    OPENCLAW_BIN_PATH=$(sudo -u ${ADMIN_USERNAME} bash -c 'echo $HOME/.npm-global/bin/openclaw')\n    cat > /etc/systemd/system/openclaw.service << SVCEOF\n    [Unit]\n    Description=OpenClaw AI Assistant Gateway\n    After=network-online.target\n    Wants=network-online.target\n\n    [Service]\n    Type=simple\n    User=${ADMIN_USERNAME}\n    Group=${ADMIN_USERNAME}\n    WorkingDirectory=/home/${ADMIN_USERNAME}\n    Environment=HOME=/home/${ADMIN_USERNAME}\n    Environment=PATH=/home/${ADMIN_USERNAME}/.npm-global/bin:/usr/local/bin:/usr/bin:/bin\n    Environment=NODE_ENV=production\n    ExecStart=${OPENCLAW_BIN_PATH} gateway --allow-unconfigured\n    Restart=on-failure\n    RestartSec=10\n    StandardOutput=journal\n    StandardError=journal\n\n    [Install]\n    WantedBy=multi-user.target\n    SVCEOF\n\n  # Enable and start OpenClaw\n  - systemctl daemon-reload\n  - systemctl enable openclaw\n  - systemctl start openclaw\n",
+            "cloudInitRaw": "#cloud-config\npackage_update: true\npackage_upgrade: true\n\npackages:\n  - curl\n  - jq\n  - unzip\n\nruncmd:\n  # Install Node.js LTS\n  - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -\n  - apt-get install -y nodejs\n\n  # Install Azure CLI\n  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash\n\n  # Login with managed identity\n  - az login --identity --allow-no-subscriptions\n\n  # Pull secrets from Key Vault (retry loop for role assignment propagation)\n  - |\n    for i in $(seq 1 30); do\n      FOUNDRY_API_KEY=$(az keyvault secret show --vault-name \"${KEY_VAULT_NAME}\" --name foundry-api-key --query value -o tsv 2>/dev/null) && break\n      echo \"Waiting for Key Vault access (attempt $i/30)...\"\n      sleep 10\n    done\n  - TELEGRAM_BOT_TOKEN=$(az keyvault secret show --vault-name \"${KEY_VAULT_NAME}\" --name telegram-bot-token --query value -o tsv)\n  - FOUNDRY_ENDPOINT=\"https://${AI_FOUNDRY_ACCOUNT_NAME}.services.ai.azure.com/openai/v1\"\n\n  # Install OpenClaw as the admin user (non-interactive)\n  - OPENCLAW_NONINTERACTIVE=1 sudo -u ${ADMIN_USERNAME} -i bash -c 'curl -fsSL https://openclaw.ai/install.sh | bash'\n\n  # Create config directory\n  - mkdir -p /home/${ADMIN_USERNAME}/.openclaw/agents/main/agent\n  - mkdir -p /home/${ADMIN_USERNAME}/.openclaw/workspace\n\n  # Write openclaw.json\n  - |\n    cat > /home/${ADMIN_USERNAME}/.openclaw/openclaw.json << OCEOF\n    {\n      \"models\": {\n        \"mode\": \"merge\",\n        \"providers\": {\n          \"azure-openai-responses\": {\n            \"baseUrl\": \"$FOUNDRY_ENDPOINT\",\n            \"apiKey\": \"$FOUNDRY_API_KEY\",\n            \"api\": \"openai-responses\",\n            \"authHeader\": false,\n            \"headers\": {\n              \"api-key\": \"$FOUNDRY_API_KEY\"\n            },\n            \"models\": [\n              {\n                \"id\": \"gpt-4o\",\n                \"name\": \"GPT-5.4-mini (Azure Foundry)\",\n                \"reasoning\": false,\n                \"input\": [\"text\"],\n                \"cost\": { \"input\": 0, \"output\": 0, \"cacheRead\": 0, \"cacheWrite\": 0 },\n                \"contextWindow\": 128000,\n                \"maxTokens\": 16384,\n                \"compat\": { \"supportsStore\": false }\n              }\n            ]\n          }\n        }\n      },\n      \"agents\": {\n        \"defaults\": {\n          \"model\": { \"primary\": \"azure-openai-responses/gpt-4o\" },\n          \"models\": { \"azure-openai-responses/gpt-4o\": {} },\n          \"workspace\": \"/home/${ADMIN_USERNAME}/.openclaw/workspace\"\n        },\n        \"list\": [\n          {\n            \"id\": \"main\",\n            \"name\": \"main\",\n            \"workspace\": \"/home/${ADMIN_USERNAME}/.openclaw/workspace\",\n            \"agentDir\": \"/home/${ADMIN_USERNAME}/.openclaw/agents/main/agent\",\n            \"model\": \"azure-openai-responses/gpt-4o\"\n          }\n        ]\n      },\n      \"channels\": {\n        \"telegram\": {\n          \"enabled\": true,\n          \"dmPolicy\": \"pairing\",\n          \"botToken\": \"$TELEGRAM_BOT_TOKEN\",\n          \"groupPolicy\": \"allowlist\",\n          \"streaming\": \"partial\"\n        }\n      },\n      \"gateway\": { \"port\": 18789, \"mode\": \"local\", \"bind\": \"loopback\" },\n      \"browser\": { \"enabled\": false },\n      \"tools\": { \"profile\": \"coding\", \"web\": { \"search\": { \"enabled\": false } } },\n      \"commands\": { \"native\": \"auto\", \"restart\": true },\n      \"session\": { \"dmScope\": \"per-channel-peer\" }\n    }\n    OCEOF\n\n  # Write auth-profiles.json\n  - |\n    cat > /home/${ADMIN_USERNAME}/.openclaw/agents/main/agent/auth-profiles.json << APEOF\n    {\n      \"version\": 1,\n      \"profiles\": {\n        \"azure-openai-responses:default\": {\n          \"type\": \"api_key\",\n          \"provider\": \"azure-openai-responses\",\n          \"key\": \"$FOUNDRY_API_KEY\"\n        }\n      },\n      \"lastGood\": {\n        \"azure-openai-responses\": \"azure-openai-responses:default\"\n      }\n    }\n    APEOF\n\n  # Fix ownership\n  - chown -R ${ADMIN_USERNAME}:${ADMIN_USERNAME} /home/${ADMIN_USERNAME}/.openclaw\n\n  # Determine openclaw binary path (installer puts it in .npm-global/bin)\n  - OPENCLAW_BIN=$(sudo -u ${ADMIN_USERNAME} -i bash -c 'command -v openclaw 2>/dev/null || echo /home/${ADMIN_USERNAME}/.npm-global/bin/openclaw')\n\n  # Create systemd service\n  - |\n    OPENCLAW_BIN_PATH=$(sudo -u ${ADMIN_USERNAME} bash -c 'echo $HOME/.npm-global/bin/openclaw')\n    cat > /etc/systemd/system/openclaw.service << SVCEOF\n    [Unit]\n    Description=OpenClaw AI Assistant Gateway\n    After=network-online.target\n    Wants=network-online.target\n\n    [Service]\n    Type=simple\n    User=${ADMIN_USERNAME}\n    Group=${ADMIN_USERNAME}\n    WorkingDirectory=/home/${ADMIN_USERNAME}\n    Environment=HOME=/home/${ADMIN_USERNAME}\n    Environment=PATH=/home/${ADMIN_USERNAME}/.npm-global/bin:/usr/local/bin:/usr/bin:/bin\n    Environment=NODE_ENV=production\n    ExecStart=${OPENCLAW_BIN_PATH} gateway --allow-unconfigured\n    Restart=on-failure\n    RestartSec=10\n    StandardOutput=journal\n    StandardError=journal\n\n    [Install]\n    WantedBy=multi-user.target\n    SVCEOF\n\n  # Enable and start OpenClaw\n  - systemctl daemon-reload\n  - systemctl enable openclaw\n  - systemctl start openclaw\n",
             "cloudInitConfigured": "[replace(replace(replace(variables('cloudInitRaw'), '${KEY_VAULT_NAME}', parameters('keyVaultName')), '${AI_FOUNDRY_ACCOUNT_NAME}', parameters('aiFoundryAccountName')), '${ADMIN_USERNAME}', parameters('adminUsername'))]"
           },
           "resources": [
@@ -757,7 +805,7 @@
             "value": "[parameters('keyVaultName')]"
           },
           "foundryApiKey": {
-            "value": "[listOutputsWithSecureValues('aiFoundry', '2025-04-01').foundryApiKey]"
+            "value": "[listOutputsWithSecureValues('aiFoundryBase', '2025-04-01').foundryApiKey]"
           },
           "telegramBotToken": {
             "value": "[parameters('telegramBotToken')]"
@@ -872,7 +920,7 @@
         }
       },
       "dependsOn": [
-        "aiFoundry",
+        "aiFoundryBase",
         "compute"
       ]
     },
@@ -894,10 +942,10 @@
             "value": "[reference('networking').outputs.peSubnetId.value]"
           },
           "aiServicesId": {
-            "value": "[reference('aiFoundry').outputs.aiServicesId.value]"
+            "value": "[reference('aiFoundryBase').outputs.aiServicesId.value]"
           },
           "hubId": {
-            "value": "[reference('aiFoundry').outputs.hubId.value]"
+            "value": "[reference('aiFoundryBase').outputs.hubId.value]"
           },
           "keyVaultId": {
             "value": "[reference('keyvault').outputs.keyVaultId.value]"
@@ -1075,7 +1123,7 @@
         }
       },
       "dependsOn": [
-        "aiFoundry",
+        "aiFoundryBase",
         "keyvault",
         "networking"
       ]
@@ -1096,15 +1144,15 @@
     },
     "aiServicesEndpoint": {
       "type": "string",
-      "value": "[reference('aiFoundry').outputs.aiServicesEndpoint.value]"
+      "value": "[reference('aiFoundryBase').outputs.aiServicesEndpoint.value]"
     },
     "hubId": {
       "type": "string",
-      "value": "[reference('aiFoundry').outputs.hubId.value]"
+      "value": "[reference('aiFoundryBase').outputs.hubId.value]"
     },
     "projectId": {
       "type": "string",
-      "value": "[reference('aiFoundry').outputs.projectId.value]"
+      "value": "[reference('aiFoundryProject').outputs.projectId.value]"
     }
   }
 }
