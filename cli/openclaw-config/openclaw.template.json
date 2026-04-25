@@ -52,6 +52,7 @@
   },
   "gateway": { "port": 18789, "mode": "local", "bind": "loopback" },
   "browser": { "enabled": false },
+  "plugins": { "bonjour": { "enabled": false } },
   "tools": { "profile": "coding", "web": { "search": { "enabled": false } } },
   "commands": { "native": "auto", "restart": true },
   "session": { "dmScope": "per-channel-peer" }
